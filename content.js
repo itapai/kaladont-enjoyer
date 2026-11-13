@@ -1,8 +1,7 @@
 (() => {
   const E = KaladontEngine;
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", auto: "kaladontAutoSend", pilot: "kaladontAutopilot" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot" };
   let autopilot = false;
-  let autoSend = true;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
   let alive = new Set();       // završeci za koje znamo da imaju nastavak
@@ -13,8 +12,6 @@
     blacklist = new Set(r[KEYS.black] || []);
     alive = new Set(r[KEYS.alive] || []);
     dead = new Set(r[KEYS.dead] || []);
-    autoSend = r[KEYS.auto] !== false;
-    $(".kh-auto-cb").checked = autoSend;
     autopilot = r[KEYS.pilot] === true;
     $(".kh-pilot-cb").checked = autopilot;
     render(lastPrefix, true);
@@ -37,7 +34,6 @@
         <button class="kh-go">Traži</button>
         <button class="kh-re" title="Nove preporuke">↻</button>
       </div>
-      <label class="kh-auto"><input type="checkbox" class="kh-auto-cb"> automatski pošalji (Enter)</label>
       <label class="kh-auto kh-pilot"><input type="checkbox" class="kh-pilot-cb"> 🤖 autopilot (igra umjesto mene)</label>
       <div class="kh-status"></div>
       <div class="kh-info"></div>
@@ -55,11 +51,6 @@
   $(".kh-go").onclick = () => render(inp.value, true);
   $(".kh-re").onclick = () => render(inp.value, true);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") render(inp.value, true); e.stopPropagation(); });
-  $(".kh-auto-cb").checked = autoSend;
-  $(".kh-auto-cb").onchange = e => {
-    autoSend = e.target.checked;
-    browser.storage.local.set({ [KEYS.auto]: autoSend });
-  };
   $(".kh-pilot-cb").onchange = e => {
     autopilot = e.target.checked;
     browser.storage.local.set({ [KEYS.pilot]: autopilot });
@@ -127,7 +118,7 @@
 
   // Igra sama dodaje tražena slova ispred polja (span.prefiks-unosa) i šalje
   // "traženaSlova + unos", pa u polje upisujemo riječ BEZ početnih slova.
-  function fillGame(word, forceSend = false) {
+  function fillGame(word) {
     const el = gameInput();
     if (!el) return;
     const prefix = E.norm(readPrefix() || lastPrefix || "");
@@ -136,7 +127,7 @@
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
     el.dispatchEvent(new InputEvent("input", { bubbles: true }));
     el.focus();
-    if (autoSend || forceSend) setTimeout(() => submitGame(el), 50);
+    setTimeout(() => submitGame(el), 50);
   }
 
   // isto kao Enter / klik na "Pošalji"
@@ -217,7 +208,7 @@
     setTimeout(() => {
       if (!autopilot || !myTurn() || E.norm(readPrefix() || "") !== prefix) { pilotBusy = false; return; }
       pilotTurn.tried.add(pick.word);
-      fillGame(pick.word, true);
+      fillGame(pick.word);
       // provjeri je li igra prihvatila riječ
       setTimeout(() => checkResult(pick.word, prefix), 2000);
     }, delay);
