@@ -1,7 +1,8 @@
 (() => {
   const E = KaladontEngine;
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", replay: "kaladontAutoReplay" };
   let autopilot = false;
+  let autoReplay = false;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
   let alive = new Set();       // završeci za koje znamo da imaju nastavak
@@ -14,6 +15,8 @@
     dead = new Set(r[KEYS.dead] || []);
     autopilot = r[KEYS.pilot] === true;
     $(".kh-pilot-cb").checked = autopilot;
+    autoReplay = r[KEYS.replay] === true;
+    $(".kh-replay-cb").checked = autoReplay;
     render(lastPrefix, true);
   });
   const save = () => browser.storage.local.set({
@@ -35,6 +38,7 @@
         <button class="kh-re" title="Nove preporuke">↻</button>
       </div>
       <label class="kh-auto kh-pilot"><input type="checkbox" class="kh-pilot-cb"> 🤖 autopilot (igra umjesto mene)</label>
+      <label class="kh-auto"><input type="checkbox" class="kh-replay-cb"> 🔁 automatski nova igra</label>
       <div class="kh-status"></div>
       <div class="kh-info"></div>
       <div class="kh-title">🏁 Završavaju igru</div>
@@ -55,6 +59,11 @@
     autopilot = e.target.checked;
     browser.storage.local.set({ [KEYS.pilot]: autopilot });
     status(autopilot ? "Autopilot uključen – čekam svoj red." : "");
+    tick();
+  };
+  $(".kh-replay-cb").onchange = e => {
+    autoReplay = e.target.checked;
+    browser.storage.local.set({ [KEYS.replay]: autoReplay });
     tick();
   };
   const status = t => { $(".kh-status").textContent = t; };
@@ -233,7 +242,28 @@
     pilotStep();
   }
 
+  // ---------- automatski nova igra ----------
+  // Na kraju igre se pojavi "Igraj opet" (a.igraj-opet-gumb) koji vodi u red čekanja.
+  let replayTimer = null, lastReplay = 0;
+  function replayStep() {
+    if (!autoReplay || replayTimer || Date.now() - lastReplay < 10000) return;
+    const b = document.querySelector("a.igraj-opet-gumb");
+    if (!b || b.offsetParent === null) return;
+    status("Igra gotova – nova igra za 3 s…");
+    replayTimer = setTimeout(() => {
+      replayTimer = null;
+      const b2 = document.querySelector("a.igraj-opet-gumb");
+      if (!autoReplay || !b2) return;
+      lastReplay = Date.now();
+      used.clear();          // nova partija, nove riječi
+      pilotTurn = null;
+      status("Tražim novu igru…");
+      b2.click();
+    }, 3000);
+  }
+
   function tick() {
+    replayStep();
     const changed = learn();
     const p = readPrefix();
     if (p) render(p, changed);
