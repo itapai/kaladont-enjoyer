@@ -294,10 +294,19 @@
     } else {
       // odbijeno: ne postoji / vlastito ime / već iskorišteno
       const txt = document.body.innerText;
-      if (/već (je )?iskorišten/i.test(txt)) used.add(word);
-      else { blacklist.add(word); save(); }
-      mark(word, "kh-bad");
-      status(`${word} nije prošla, probam drugu…`);
+      if (/već (je )?iskorišten/i.test(txt)) {
+        // riječ postoji, samo je već odigrana u ovoj partiji -> makni je samo za ovu partiju
+        used.add(word);
+        render(prefix, true);
+      } else {
+        // igra je ne priznaje -> klikni ✕ (trajno makni i ponudi drugu)
+        const x = [...panel.querySelectorAll("li")]
+          .find(li => li.querySelector(".kh-word")?.textContent === word)
+          ?.querySelector(".kh-x:last-of-type");
+        if (x) x.click();
+        else { blacklist.add(word); save(); render(prefix, true); }
+      }
+      status(`${word} nije prošla, maknuo sam je, probam drugu…`);
     }
     pilotStep();
   }
