@@ -115,13 +115,24 @@
     return li;
   }
 
+  let pilotTurn = null;      // autopilot: { prefix, tried: Set } za trenutni potez
+  let shown = { prefix: null, words: [] };   // riječi trenutno prikazane u prozoru (redom)
+
+  // označi riječ u prozoru: "playing" (autopilot je igra) ili "bad" (odbijena)
+  function mark(word, cls) {
+    for (const b of panel.querySelectorAll(".kh-word"))
+      if (b.textContent === word) b.classList.add(cls);
+  }
+
   function render(prefix, force) {
     if (!prefix) return;
     prefix = E.norm(prefix);
     if (!force && prefix === lastPrefix) return;
     lastPrefix = prefix;
     inp.value = prefix;
-    const r = E.suggest(prefix, { used: new Set([...used, ...blacklist]), alive, dead }, 3);
+    const tried = pilotTurn && pilotTurn.prefix === prefix ? pilotTurn.tried : [];
+    const r = E.suggest(prefix, { used: new Set([...used, ...blacklist, ...tried]), alive, dead }, 3);
+    shown = { prefix, words: [...r.finishers, ...r.continuers].map(x => x.word) };
     $(".kh-info").textContent = `Na "${prefix.toUpperCase()}": ${r.total} riječi u rječniku` +
       (learned.size ? ` · naučeno iz igre: ${learned.size}` : "");
     const fin = $(".kh-fin"), cont = $(".kh-cont");
@@ -239,7 +250,6 @@
   }
 
   let pilotBusy = false;     // čeka se odgovor igre ili "razmišljanje"
-  let pilotTurn = null;      // { prefix, tried: Set }
 
   function pilotStep() {
     if (!autopilot || pilotBusy || !myTurn()) return;
@@ -248,11 +258,17 @@
     if (!pilotTurn || pilotTurn.prefix !== prefix) pilotTurn = { prefix, tried: new Set() };
     if (pilotTurn.tried.size >= 8) { status(`Odustajem nakon ${pilotTurn.tried.size} pokušaja – tvoj potez!`); return; }
 
-    const excluded = new Set([...used, ...blacklist, ...pilotTurn.tried]);
-    const r = E.suggest(prefix, { used: excluded, alive, dead }, 3);
-    // prvo završna riječ (✔ prije ?), inače nastavak s najmanje odgovora za protivnika
-    const pick = r.finishers[0] || r.continuers[0];
-    if (!pick) { status(`Ne znam riječ na ${prefix.toUpperCase()} – tvoj potez!`); return; }
+    // autopilot igra SAMO riječi koje su ponuđene u prozoru, redom:
+    // prvo završne, pa nastavci. Kad sve ponuđene ne prođu -> osvježi (↻) i probaj nove.
+    if (shown.prefix !== prefix) render(prefix, true);
+    let pickWord = shown.words.find(w => !pilotTurn.tried.has(w));
+    if (!pickWord) {
+      render(prefix, true);
+      pickWord = shown.words.find(w => !pilotTurn.tried.has(w));
+    }
+    if (!pickWord) { status(`Ne znam riječ na ${prefix.toUpperCase()} – tvoj potez!`); return; }
+    const pick = { word: pickWord };
+    mark(pick.word, "kh-playing");
 
     pilotBusy = true;
     const delay = rand(TIMING.think[0], TIMING.think[1]);
@@ -280,8 +296,8 @@
       const txt = document.body.innerText;
       if (/već (je )?iskorišten/i.test(txt)) used.add(word);
       else { blacklist.add(word); save(); }
+      mark(word, "kh-bad");
       status(`${word} nije prošla, probam drugu…`);
-      render(lastPrefix, true);
     }
     pilotStep();
   }
