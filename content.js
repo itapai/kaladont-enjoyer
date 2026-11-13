@@ -7,12 +7,13 @@
     perLetter: [90, 220],       // razmak između slova
     beforeSend: [250, 600]      // pauza prije Entera
   };
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", learned: "kaladontLearnedWords", replay: "kaladontAutoReplay" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", learned: "kaladontLearnedWords", replay: "kaladontAutoReplay", aliveSrc: "kaladontAliveSource" };
   let autopilot = false;
   let autoReplay = false;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
   let alive = new Set();       // završeci za koje znamo da imaju nastavak
+  let aliveSrc = {};           // završetak -> odakle znamo (riječ iz igre ili "↩")
   let dead = new Set();        // završeci za koje je igra potvrdila "Nema nastavka"
   let learned = new Set();     // riječi naučene iz igre (nema ih u ugrađenom rječniku)
   let lastPrefix = null;
@@ -21,6 +22,7 @@
   browser.storage.local.get(Object.values(KEYS)).then(r => {
     blacklist = new Set(r[KEYS.black] || []);
     alive = new Set(r[KEYS.alive] || []);
+    aliveSrc = r[KEYS.aliveSrc] || {};
     dead = new Set(r[KEYS.dead] || []);
     learned = new Set(r[KEYS.learned] || []);
     E.addWords(learned);
@@ -33,7 +35,7 @@
     render(lastPrefix, true);
   });
   const save = () => browser.storage.local.set({
-    [KEYS.black]: [...blacklist], [KEYS.alive]: [...alive], [KEYS.dead]: [...dead],
+    [KEYS.black]: [...blacklist], [KEYS.alive]: [...alive], [KEYS.dead]: [...dead], [KEYS.aliveSrc]: aliveSrc,
     [KEYS.learned]: [...learned]
   });
 
@@ -60,7 +62,7 @@
       <div class="kh-title">➡️ Nastavljaju igru</div>
       <ul class="kh-cont"></ul>
       <div class="kh-foot">klik = utipkaj i pošalji · dvoklik = odmah · ✔ = igra potvrdila da nema nastavka ·
-        ↩ = ipak ima nastavak · ✕ = igra ne priznaje riječ</div>
+        ↩ = ipak ima nastavak · 🏁 = ipak nema nastavka · ✕ = igra ne priznaje riječ</div>
     </div>`;
   document.documentElement.appendChild(panel);
 
@@ -101,12 +103,20 @@
                           : "U rječniku nema riječi na ova slova (igra možda ima)";
     } else {
       meta.textContent = `→ ${s.end.toUpperCase()} (${s.rare ? "rijetko" : s.count})`;
-      meta.title = "Broj mogućih odgovora protivnika";
+      meta.title = s.rare
+        ? `U rječniku nema riječi na ${s.end.toUpperCase()}, ali zapamćeno je da nastavak postoji: ` +
+          (aliveSrc[s.end] || (alive.has(s.end) ? "nepoznat izvor (staro)" : "u rječniku postoji riječ druge vrste (pridjev, prilog…)"))
+        : "Broj mogućih odgovora protivnika";
     }
     li.append(word, meta);
     if (isFinisher && !s.kaladont) {
       li.append(btn("kh-x", "↩", `Na ${s.end.toUpperCase()} ipak ima nastavka – ne nudi više kao završnu`, () => {
-        alive.add(s.end); dead.delete(s.end); save(); render(lastPrefix, true);
+        alive.add(s.end); aliveSrc[s.end] = "ručno (↩)"; dead.delete(s.end); save(); render(lastPrefix, true);
+      }));
+    }
+    if (!isFinisher && s.rare) {
+      li.append(btn("kh-x", "🏁", `Na ${s.end.toUpperCase()} ipak nema nastavka – ponudi kao završnu`, () => {
+        alive.delete(s.end); delete aliveSrc[s.end]; dead.add(s.end); save(); render(lastPrefix, true);
       }));
     }
     li.append(btn("kh-x", "✕", "Igra ne priznaje ovu riječ – ne predlaži je više", () => {
@@ -231,7 +241,7 @@
       // igra je prihvatila riječ -> ako je nemamo, naučimo je
       if (!E.hasWord(w) && !blacklist.has(w)) { learned.add(w); E.addWords([w]); changed = true; }
       const k = E.startKey(w);
-      if (!alive.has(k)) { alive.add(k); dead.delete(k); changed = true; }
+      if (!alive.has(k)) { alive.add(k); aliveSrc[k] = `riječ „${w}” iz igre`; dead.delete(k); changed = true; }
     }
     const m = document.body.innerText.match(/Nema nastavka na ([A-ZČĆĐŠŽ]{1,4})/g) || [];
     for (const s of m) {
