@@ -82,25 +82,31 @@
 
   // ---------- upis u igru ----------
   function gameInput() {
+    const el = document.querySelector("form.zona-poteza input[type='text']");
+    if (el) return el;
     const all = [...document.querySelectorAll('input[type="text"], input:not([type]), textarea')]
-      .filter(el => !panel.contains(el) && el.offsetParent !== null);
+      .filter(e => !panel.contains(e) && e.offsetParent !== null);
     return all[all.length - 1] || null;
   }
 
+  // Igra sama dodaje tražena slova ispred polja (span.prefiks-unosa) i šalje
+  // "traženaSlova + unos", pa u polje upisujemo riječ BEZ početnih slova.
   function fillGame(word) {
     const el = gameInput();
     if (!el) return;
-    // postavi vrijednost tako da je i React/Vue registriraju
+    const prefix = KaladontEngine.norm(readPrefix() || lastPrefix || "");
+    const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
     const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, word);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
+    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
     el.focus();
   }
 
   // ---------- čitanje stanja igre ----------
   // Traži tekst "Traži se riječ na:" i slova odmah iza njega.
   function readPrefix() {
+    const strong = document.querySelector(".trazena-slova strong");
+    if (strong && strong.textContent.trim()) return strong.textContent.trim();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
