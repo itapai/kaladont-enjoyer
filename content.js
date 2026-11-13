@@ -52,7 +52,7 @@
       <ul class="kh-fin"></ul>
       <div class="kh-title">➡️ Nastavljaju igru</div>
       <ul class="kh-cont"></ul>
-      <div class="kh-foot">klik = upiši (i pošalji) · ✔ = igra potvrdila da nema nastavka ·
+      <div class="kh-foot">klik = utipkaj i pošalji · dvoklik = odmah · ✔ = igra potvrdila da nema nastavka ·
         ↩ = ipak ima nastavak · ✕ = igra ne priznaje riječ</div>
     </div>`;
   document.documentElement.appendChild(panel);
@@ -84,7 +84,8 @@
 
   function item(s, isFinisher) {
     const li = document.createElement("li");
-    const word = btn("kh-word", s.word, "Upiši u igru", () => fillGame(s.word));
+    const word = btn("kh-word", s.word, "Klik: utipkaj i pošalji · dvoklik: odmah pošalji", () => fillGame(s.word));
+    word.ondblclick = () => fillGame(s.word, true);
     const meta = document.createElement("span");
     meta.className = "kh-meta";
     if (isFinisher) {
@@ -136,37 +137,39 @@
   // "traženaSlova + unos", pa u polje upisujemo riječ BEZ početnih slova.
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const rand = (a, b) => a + Math.random() * (b - a);
-  let typing = false;
+  let typingId = 0; // svako novo upisivanje prekida prethodno
 
-  // Tipka slovo po slovo kao čovjek, pa pošalje. Vraća true ako je poslano.
-  async function fillGame(word) {
-    if (typing) return false;
+  // Tipka slovo po slovo kao čovjek, pa pošalje. instant = odmah upiši i pošalji.
+  // Vraća true ako je poslano.
+  async function fillGame(word, instant = false) {
     const el = gameInput();
     if (!el) return false;
-    typing = true;
-    try {
-      const prefix = E.norm(readPrefix() || lastPrefix || "");
-      const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
-      const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      const setVal = v => {
-        Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
-        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      };
-      el.focus();
-      setVal("");
-      await sleep(rand(TIMING.beforeTyping[0], TIMING.beforeTyping[1]));
-      for (let i = 1; i <= rest.length; i++) {
-        if (!el.isConnected) return false;          // potez je u međuvremenu prošao
-        setVal(rest.slice(0, i));
-        await sleep(rand(TIMING.perLetter[0], TIMING.perLetter[1]));
-      }
-      await sleep(rand(TIMING.beforeSend[0], TIMING.beforeSend[1]));
-      if (!el.isConnected) return false;
+    const id = ++typingId;
+    const alive = () => id === typingId && el.isConnected;
+    const prefix = E.norm(readPrefix() || lastPrefix || "");
+    const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setVal = v => {
+      Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+      el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    };
+    el.focus();
+    if (instant) {
+      setVal(rest);
       submitGame(el);
       return true;
-    } finally {
-      typing = false;
     }
+    setVal("");
+    await sleep(rand(TIMING.beforeTyping[0], TIMING.beforeTyping[1]));
+    for (let i = 1; i <= rest.length; i++) {
+      if (!alive()) return false;           // prekinuto ili je potez prošao
+      setVal(rest.slice(0, i));
+      await sleep(rand(TIMING.perLetter[0], TIMING.perLetter[1]));
+    }
+    await sleep(rand(TIMING.beforeSend[0], TIMING.beforeSend[1]));
+    if (!alive()) return false;
+    submitGame(el);
+    return true;
   }
 
   // isto kao Enter / klik na "Pošalji"
