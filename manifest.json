@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "name": "Kaladont pomoćnik",
+  "version": "1.0",
+  "description": "Predlaže riječi za kaladont.hr: 3 koje završavaju igru i 3 koje je nastavljaju.",
+  "permissions": ["storage"],
+  "browser_specific_settings": { "gecko": { "id": "kaladont-helper@local" } },
+  "content_scripts": [{
+    "matches": ["*://kaladont.hr/*", "*://*.kaladont.hr/*"],
+    "js": ["words.js", "engine.js", "content.js"],
+    "css": ["content.css"],
+    "run_at": "document_idle"
+  }],
+  "browser_action": { "default_title": "Kaladont pomoćnik", "default_popup": "popup.html" }
+}
