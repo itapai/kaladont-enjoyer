@@ -20,3 +20,5 @@
 #kh-panel .kh-none{color:#999;font-style:italic}
 #kh-panel .kh-foot{font-size:11px;color:#89a;margin-top:6px}
 #kh-panel .kh-auto{display:flex;align-items:center;gap:4px;font-size:12px;margin-top:6px;cursor:pointer}
+#kh-panel .kh-pilot{font-weight:700}
+#kh-panel .kh-status{font-size:12px;color:#1d6b5a;min-height:0;margin-top:2px}

@@ -1,6 +1,7 @@
 (() => {
   const E = KaladontEngine;
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", auto: "kaladontAutoSend" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", auto: "kaladontAutoSend", pilot: "kaladontAutopilot" };
+  let autopilot = false;
   let autoSend = true;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
@@ -14,6 +15,8 @@
     dead = new Set(r[KEYS.dead] || []);
     autoSend = r[KEYS.auto] !== false;
     $(".kh-auto-cb").checked = autoSend;
+    autopilot = r[KEYS.pilot] === true;
+    $(".kh-pilot-cb").checked = autopilot;
     render(lastPrefix, true);
   });
   const save = () => browser.storage.local.set({
@@ -35,6 +38,8 @@
         <button class="kh-re" title="Nove preporuke">↻</button>
       </div>
       <label class="kh-auto"><input type="checkbox" class="kh-auto-cb"> automatski pošalji (Enter)</label>
+      <label class="kh-auto kh-pilot"><input type="checkbox" class="kh-pilot-cb"> 🤖 autopilot (igra umjesto mene)</label>
+      <div class="kh-status"></div>
       <div class="kh-info"></div>
       <div class="kh-title">🏁 Završavaju igru</div>
       <ul class="kh-fin"></ul>
@@ -55,6 +60,13 @@
     autoSend = e.target.checked;
     browser.storage.local.set({ [KEYS.auto]: autoSend });
   };
+  $(".kh-pilot-cb").onchange = e => {
+    autopilot = e.target.checked;
+    browser.storage.local.set({ [KEYS.pilot]: autopilot });
+    status(autopilot ? "Autopilot uključen – čekam svoj red." : "");
+    tick();
+  };
+  const status = t => { $(".kh-status").textContent = t; };
   $(".kh-min").onclick = () => panel.classList.toggle("kh-collapsed");
 
   function btn(cls, text, title, onclick) {
@@ -115,7 +127,7 @@
 
   // Igra sama dodaje tražena slova ispred polja (span.prefiks-unosa) i šalje
   // "traženaSlova + unos", pa u polje upisujemo riječ BEZ početnih slova.
-  function fillGame(word) {
+  function fillGame(word, forceSend = false) {
     const el = gameInput();
     if (!el) return;
     const prefix = E.norm(readPrefix() || lastPrefix || "");
@@ -124,7 +136,7 @@
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
     el.dispatchEvent(new InputEvent("input", { bubbles: true }));
     el.focus();
-    if (autoSend) setTimeout(() => submitGame(el), 50);
+    if (autoSend || forceSend) setTimeout(() => submitGame(el), 50);
   }
 
   // isto kao Enter / klik na "Pošalji"
@@ -176,10 +188,65 @@
     return changed;
   }
 
+  // ---------- autopilot ----------
+  // Polje za unos (form.zona-poteza) igra prikazuje samo kad je moj red.
+  function myTurn() {
+    const el = document.querySelector("form.zona-poteza input[type='text']");
+    return !!el && !el.disabled;
+  }
+
+  let pilotBusy = false;     // čeka se odgovor igre ili "razmišljanje"
+  let pilotTurn = null;      // { prefix, tried: Set }
+
+  function pilotStep() {
+    if (!autopilot || pilotBusy || !myTurn()) return;
+    const prefix = E.norm(readPrefix() || "");
+    if (!prefix) return;
+    if (!pilotTurn || pilotTurn.prefix !== prefix) pilotTurn = { prefix, tried: new Set() };
+    if (pilotTurn.tried.size >= 8) { status(`Odustajem nakon ${pilotTurn.tried.size} pokušaja – tvoj potez!`); return; }
+
+    const excluded = new Set([...used, ...blacklist, ...pilotTurn.tried]);
+    const r = E.suggest(prefix, { used: excluded, alive, dead }, 3);
+    // prvo završna riječ (✔ prije ?), inače nastavak s najmanje odgovora za protivnika
+    const pick = r.finishers[0] || r.continuers[0];
+    if (!pick) { status(`Ne znam riječ na ${prefix.toUpperCase()} – tvoj potez!`); return; }
+
+    pilotBusy = true;
+    const delay = 700 + Math.random() * 1300; // malo "razmišljanja"
+    status(`Igram: ${pick.word}…`);
+    setTimeout(() => {
+      if (!autopilot || !myTurn() || E.norm(readPrefix() || "") !== prefix) { pilotBusy = false; return; }
+      pilotTurn.tried.add(pick.word);
+      fillGame(pick.word, true);
+      // provjeri je li igra prihvatila riječ
+      setTimeout(() => checkResult(pick.word, prefix), 2000);
+    }, delay);
+  }
+
+  function checkResult(word, prefix) {
+    const btn = document.querySelector("form.zona-poteza button[type='submit']");
+    if (btn && /Provjera/i.test(btn.textContent)) { setTimeout(() => checkResult(word, prefix), 500); return; }
+    pilotBusy = false;
+    const stillMine = myTurn() && E.norm(readPrefix() || "") === prefix;
+    if (!stillMine) {
+      used.add(word);
+      status(`Odigrao: ${word}`);
+    } else {
+      // odbijeno: ne postoji / vlastito ime / već iskorišteno
+      const txt = document.body.innerText;
+      if (/već (je )?iskorišten/i.test(txt)) used.add(word);
+      else { blacklist.add(word); save(); }
+      status(`${word} nije prošla, probam drugu…`);
+      render(lastPrefix, true);
+    }
+    pilotStep();
+  }
+
   function tick() {
     const changed = learn();
     const p = readPrefix();
     if (p) render(p, changed);
+    pilotStep();
   }
 
   let pending = false;

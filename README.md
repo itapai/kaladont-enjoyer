@@ -17,6 +17,7 @@ Firefox ekstenzija za igru [kaladont.hr](https://kaladont.hr). Za zadana dva slo
 - Ekstenzija uči iz igre: slova kojima počinje svaka odigrana riječ više se ne smatraju mrtvima, a „Nema nastavka na XX” ih potvrđuje.
 - Kad se traži „KA”, prvi prijedlog je „kaladont” (izbacuje prethodnog igrača). Riječi koje završavaju na „ka” se ne predlažu.
 - ↻ daje nove prijedloge.
+- 🤖 **Autopilot** (kvačica u prozoru): kad je tvoj red, sam odigra riječ nakon 1–2 sekunde. Prvo bira završnu riječ, a ako je nema, onda nastavak koji protivniku ostavlja najmanje odgovora. Ako igra odbije riječ, zapamti to i proba drugu (najviše 8 pokušaja po potezu). Kad ne zna riječ, prepušta potez tebi.
 - Ikona ekstenzije u alatnoj traci otvara isti alat i izvan igre.
 
 ## Instalacija
