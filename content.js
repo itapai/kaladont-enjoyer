@@ -7,27 +7,34 @@
     perLetter: [90, 220],       // razmak između slova
     beforeSend: [250, 600]      // pauza prije Entera
   };
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", replay: "kaladontAutoReplay" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", learned: "kaladontLearnedWords", replay: "kaladontAutoReplay" };
   let autopilot = false;
   let autoReplay = false;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
   let alive = new Set();       // završeci za koje znamo da imaju nastavak
   let dead = new Set();        // završeci za koje je igra potvrdila "Nema nastavka"
+  let learned = new Set();     // riječi naučene iz igre (nema ih u ugrađenom rječniku)
   let lastPrefix = null;
 
+  let loaded = false;   // dok se ne učita spremljeno stanje, ništa ne spremaj
   browser.storage.local.get(Object.values(KEYS)).then(r => {
     blacklist = new Set(r[KEYS.black] || []);
     alive = new Set(r[KEYS.alive] || []);
     dead = new Set(r[KEYS.dead] || []);
+    learned = new Set(r[KEYS.learned] || []);
+    E.addWords(learned);
     autopilot = r[KEYS.pilot] === true;
     $(".kh-pilot-cb").checked = autopilot;
     autoReplay = r[KEYS.replay] === true;
     $(".kh-replay-cb").checked = autoReplay;
+    loaded = true;
+    tick();
     render(lastPrefix, true);
   });
   const save = () => browser.storage.local.set({
-    [KEYS.black]: [...blacklist], [KEYS.alive]: [...alive], [KEYS.dead]: [...dead]
+    [KEYS.black]: [...blacklist], [KEYS.alive]: [...alive], [KEYS.dead]: [...dead],
+    [KEYS.learned]: [...learned]
   });
 
   // ---------- UI ----------
@@ -115,7 +122,8 @@
     lastPrefix = prefix;
     inp.value = prefix;
     const r = E.suggest(prefix, { used: new Set([...used, ...blacklist]), alive, dead }, 3);
-    $(".kh-info").textContent = `Na "${prefix.toUpperCase()}": ${r.total} riječi u rječniku`;
+    $(".kh-info").textContent = `Na "${prefix.toUpperCase()}": ${r.total} riječi u rječniku` +
+      (learned.size ? ` · naučeno iz igre: ${learned.size}` : "");
     const fin = $(".kh-fin"), cont = $(".kh-cont");
     fin.textContent = ""; cont.textContent = "";
     if (!r.finishers.length) fin.innerHTML = `<li class="kh-none">nema</li>`;
@@ -209,6 +217,8 @@
       const w = E.norm(el.textContent).replace(/\s+/g, "");
       if (!/^[a-zčćđšž]{3,}$/.test(w)) continue;
       used.add(w);
+      // igra je prihvatila riječ -> ako je nemamo, naučimo je
+      if (!E.hasWord(w) && !blacklist.has(w)) { learned.add(w); E.addWords([w]); changed = true; }
       const k = E.startKey(w);
       if (!alive.has(k)) { alive.add(k); dead.delete(k); changed = true; }
     }
@@ -297,6 +307,7 @@
   }
 
   function tick() {
+    if (!loaded) return;
     replayStep();
     const changed = learn();
     const p = readPrefix();

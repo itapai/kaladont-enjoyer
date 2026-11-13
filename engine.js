@@ -19,12 +19,24 @@ const KaladontEngine = (() => {
   const dictStarts = new Set(KALADONT_STARTS);
 
   const byStart = new Map();
-  for (const w of KALADONT_WORDS) {
-    if (letters(w).length < 3) continue;
-    const k = startKey(w);
-    if (!byStart.has(k)) byStart.set(k, []);
-    byStart.get(k).push(w);
+  const known = new Set();
+  // dodaje riječi u rječnik; vraća broj stvarno novih
+  function addWords(list) {
+    let n = 0;
+    for (const raw of list) {
+      const w = norm(raw);
+      if (known.has(w) || !/^[a-zčćđšž]+$/.test(w) || letters(w).length < 3) continue;
+      known.add(w);
+      const k = startKey(w);
+      if (!byStart.has(k)) byStart.set(k, []);
+      byStart.get(k).push(w);
+      dictStarts.add(k);
+      n++;
+    }
+    return n;
   }
+  addWords(KALADONT_WORDS);
+  const hasWord = w => known.has(norm(w));
 
   function shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) {
@@ -83,5 +95,5 @@ const KaladontEngine = (() => {
     };
   }
 
-  return { suggest, letters, startKey, endKey, norm };
+  return { suggest, letters, startKey, endKey, norm, addWords, hasWord };
 })();
