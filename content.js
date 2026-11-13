@@ -1,5 +1,12 @@
 (() => {
   const E = KaladontEngine;
+  // vremena u milisekundama [min, max]
+  const TIMING = {
+    think: [2000, 4000],        // autopilot: "razmišljanje" prije tipkanja
+    beforeTyping: [300, 700],   // pauza prije prvog slova
+    perLetter: [90, 220],       // razmak između slova
+    beforeSend: [250, 600]      // pauza prije Entera
+  };
   const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", replay: "kaladontAutoReplay" };
   let autopilot = false;
   let autoReplay = false;
@@ -127,16 +134,39 @@
 
   // Igra sama dodaje tražena slova ispred polja (span.prefiks-unosa) i šalje
   // "traženaSlova + unos", pa u polje upisujemo riječ BEZ početnih slova.
-  function fillGame(word) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  let typing = false;
+
+  // Tipka slovo po slovo kao čovjek, pa pošalje. Vraća true ako je poslano.
+  async function fillGame(word) {
+    if (typing) return false;
     const el = gameInput();
-    if (!el) return;
-    const prefix = E.norm(readPrefix() || lastPrefix || "");
-    const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
-    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
-    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    el.focus();
-    setTimeout(() => submitGame(el), 50);
+    if (!el) return false;
+    typing = true;
+    try {
+      const prefix = E.norm(readPrefix() || lastPrefix || "");
+      const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
+      const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setVal = v => {
+        Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      };
+      el.focus();
+      setVal("");
+      await sleep(rand(TIMING.beforeTyping[0], TIMING.beforeTyping[1]));
+      for (let i = 1; i <= rest.length; i++) {
+        if (!el.isConnected) return false;          // potez je u međuvremenu prošao
+        setVal(rest.slice(0, i));
+        await sleep(rand(TIMING.perLetter[0], TIMING.perLetter[1]));
+      }
+      await sleep(rand(TIMING.beforeSend[0], TIMING.beforeSend[1]));
+      if (!el.isConnected) return false;
+      submitGame(el);
+      return true;
+    } finally {
+      typing = false;
+    }
   }
 
   // isto kao Enter / klik na "Pošalji"
@@ -212,12 +242,13 @@
     if (!pick) { status(`Ne znam riječ na ${prefix.toUpperCase()} – tvoj potez!`); return; }
 
     pilotBusy = true;
-    const delay = 700 + Math.random() * 1300; // malo "razmišljanja"
+    const delay = rand(TIMING.think[0], TIMING.think[1]);
     status(`Igram: ${pick.word}…`);
-    setTimeout(() => {
+    setTimeout(async () => {
       if (!autopilot || !myTurn() || E.norm(readPrefix() || "") !== prefix) { pilotBusy = false; return; }
       pilotTurn.tried.add(pick.word);
-      fillGame(pick.word);
+      const sent = await fillGame(pick.word);
+      if (!sent) { pilotBusy = false; return; }
       // provjeri je li igra prihvatila riječ
       setTimeout(() => checkResult(pick.word, prefix), 2000);
     }, delay);
