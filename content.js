@@ -1,6 +1,7 @@
 (() => {
   const E = KaladontEngine;
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", auto: "kaladontAutoSend" };
+  let autoSend = true;
   const used = new Set();      // riječi iskorištene u ovoj partiji
   let blacklist = new Set();   // riječi koje igra ne priznaje
   let alive = new Set();       // završeci za koje znamo da imaju nastavak
@@ -11,6 +12,8 @@
     blacklist = new Set(r[KEYS.black] || []);
     alive = new Set(r[KEYS.alive] || []);
     dead = new Set(r[KEYS.dead] || []);
+    autoSend = r[KEYS.auto] !== false;
+    $(".kh-auto-cb").checked = autoSend;
     render(lastPrefix, true);
   });
   const save = () => browser.storage.local.set({
@@ -31,12 +34,13 @@
         <button class="kh-go">Traži</button>
         <button class="kh-re" title="Nove preporuke">↻</button>
       </div>
+      <label class="kh-auto"><input type="checkbox" class="kh-auto-cb"> automatski pošalji (Enter)</label>
       <div class="kh-info"></div>
       <div class="kh-title">🏁 Završavaju igru</div>
       <ul class="kh-fin"></ul>
       <div class="kh-title">➡️ Nastavljaju igru</div>
       <ul class="kh-cont"></ul>
-      <div class="kh-foot">klik = upiši · ✔ = igra potvrdila da nema nastavka ·
+      <div class="kh-foot">klik = upiši (i pošalji) · ✔ = igra potvrdila da nema nastavka ·
         ↩ = ipak ima nastavak · ✕ = igra ne priznaje riječ</div>
     </div>`;
   document.documentElement.appendChild(panel);
@@ -46,6 +50,11 @@
   $(".kh-go").onclick = () => render(inp.value, true);
   $(".kh-re").onclick = () => render(inp.value, true);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") render(inp.value, true); e.stopPropagation(); });
+  $(".kh-auto-cb").checked = autoSend;
+  $(".kh-auto-cb").onchange = e => {
+    autoSend = e.target.checked;
+    browser.storage.local.set({ [KEYS.auto]: autoSend });
+  };
   $(".kh-min").onclick = () => panel.classList.toggle("kh-collapsed");
 
   function btn(cls, text, title, onclick) {
@@ -115,6 +124,15 @@
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
     el.dispatchEvent(new InputEvent("input", { bubbles: true }));
     el.focus();
+    if (autoSend) setTimeout(() => submitGame(el), 50);
+  }
+
+  // isto kao Enter / klik na "Pošalji"
+  function submitGame(el) {
+    const form = el.form || el.closest("form");
+    if (form && form.requestSubmit) { form.requestSubmit(); return; }
+    for (const type of ["keydown", "keypress", "keyup"])
+      el.dispatchEvent(new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
   }
 
   // ---------- čitanje stanja igre ----------

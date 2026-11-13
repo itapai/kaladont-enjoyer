@@ -10,7 +10,7 @@ Firefox ekstenzija za igru [kaladont.hr](https://kaladont.hr). Za zadana dva slo
 ## Korištenje
 
 - Na kaladont.hr se dolje desno pojavi prozor koji sam čita „Traži se riječ na: XX”.
-- Klik na riječ upiše je u polje u igri.
+- Klik na riječ upiše je u polje u igri i pošalje (kao Enter). Slanje se gasi kvačicom „automatski pošalji”.
 - ✕ označi riječ koju igra ne prihvaća. Ekstenzija je pamti i više je ne predlaže.
 - ↩ označi da na ta slova ipak ima nastavka. Ta se slova više ne nude kao završna.
 - ✔ uz završnu riječ znači da je igra potvrdila mrtva slova („Nema nastavka na XX”). ? znači samo da ih nema u rječniku.

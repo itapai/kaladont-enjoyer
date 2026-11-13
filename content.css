@@ -19,3 +19,4 @@
 #kh-panel .kh-x{border:0;background:none;color:#b55;font-size:12px}
 #kh-panel .kh-none{color:#999;font-style:italic}
 #kh-panel .kh-foot{font-size:11px;color:#89a;margin-top:6px}
+#kh-panel .kh-auto{display:flex;align-items:center;gap:4px;font-size:12px;margin-top:6px;cursor:pointer}
