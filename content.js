@@ -1,12 +1,20 @@
 (() => {
-  const STORE_KEY = "kaladontBlacklist";
-  const used = new Set();      // riječi iskorištene u ovoj partiji (ova stranica)
-  let blacklist = new Set();   // riječi koje igra ne priznaje (trajno)
+  const E = KaladontEngine;
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead" };
+  const used = new Set();      // riječi iskorištene u ovoj partiji
+  let blacklist = new Set();   // riječi koje igra ne priznaje
+  let alive = new Set();       // završeci za koje znamo da imaju nastavak
+  let dead = new Set();        // završeci za koje je igra potvrdila "Nema nastavka"
   let lastPrefix = null;
 
-  browser.storage.local.get(STORE_KEY).then(r => {
-    blacklist = new Set(r[STORE_KEY] || []);
+  browser.storage.local.get(Object.values(KEYS)).then(r => {
+    blacklist = new Set(r[KEYS.black] || []);
+    alive = new Set(r[KEYS.alive] || []);
+    dead = new Set(r[KEYS.dead] || []);
     render(lastPrefix, true);
+  });
+  const save = () => browser.storage.local.set({
+    [KEYS.black]: [...blacklist], [KEYS.alive]: [...alive], [KEYS.dead]: [...dead]
   });
 
   // ---------- UI ----------
@@ -24,11 +32,12 @@
         <button class="kh-re" title="Nove preporuke">↻</button>
       </div>
       <div class="kh-info"></div>
-      <div class="kh-title kh-fin-t">🏁 Završavaju igru</div>
+      <div class="kh-title">🏁 Završavaju igru</div>
       <ul class="kh-fin"></ul>
       <div class="kh-title">➡️ Nastavljaju igru</div>
       <ul class="kh-cont"></ul>
-      <div class="kh-foot">klik = upiši u igru · ✕ = igra ne priznaje riječ</div>
+      <div class="kh-foot">klik = upiši · ✔ = igra potvrdila da nema nastavka ·
+        ↩ = ipak ima nastavak · ✕ = igra ne priznaje riječ</div>
     </div>`;
   document.documentElement.appendChild(panel);
 
@@ -39,38 +48,44 @@
   inp.addEventListener("keydown", e => { if (e.key === "Enter") render(inp.value, true); e.stopPropagation(); });
   $(".kh-min").onclick = () => panel.classList.toggle("kh-collapsed");
 
+  function btn(cls, text, title, onclick) {
+    const b = document.createElement("button");
+    b.className = cls; b.textContent = text; b.title = title; b.onclick = onclick;
+    return b;
+  }
+
   function item(s, isFinisher) {
     const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.className = "kh-word";
-    btn.textContent = s.word;
-    btn.title = "Upiši u igru";
-    btn.onclick = () => fillGame(s.word);
+    const word = btn("kh-word", s.word, "Upiši u igru", () => fillGame(s.word));
     const meta = document.createElement("span");
     meta.className = "kh-meta";
-    meta.textContent = isFinisher ? `→ ${s.end.toUpperCase()} (0)` : `→ ${s.end.toUpperCase()} (${s.count})`;
-    meta.title = isFinisher ? "Nema riječi na ova slova" : "Broj mogućih odgovora protivnika";
-    const x = document.createElement("button");
-    x.className = "kh-x";
-    x.textContent = "✕";
-    x.title = "Igra ne priznaje ovu riječ – ne predlaži je više";
-    x.onclick = () => {
-      blacklist.add(s.word);
-      browser.storage.local.set({ [STORE_KEY]: [...blacklist] });
-      render(lastPrefix, true);
-    };
-    li.append(btn, meta, x);
+    if (isFinisher) {
+      meta.textContent = s.kaladont ? "izbacuje prethodnog" : `→ ${s.end.toUpperCase()} ${s.sure ? "✔" : "?"}`;
+      meta.title = s.sure ? "Igra je potvrdila da na ova slova nema riječi"
+                          : "U rječniku nema riječi na ova slova (igra možda ima)";
+    } else {
+      meta.textContent = `→ ${s.end.toUpperCase()} (${s.rare ? "rijetko" : s.count})`;
+      meta.title = "Broj mogućih odgovora protivnika";
+    }
+    li.append(word, meta);
+    if (isFinisher && !s.kaladont) {
+      li.append(btn("kh-x", "↩", `Na ${s.end.toUpperCase()} ipak ima nastavka – ne nudi više kao završnu`, () => {
+        alive.add(s.end); dead.delete(s.end); save(); render(lastPrefix, true);
+      }));
+    }
+    li.append(btn("kh-x", "✕", "Igra ne priznaje ovu riječ – ne predlaži je više", () => {
+      blacklist.add(s.word); save(); render(lastPrefix, true);
+    }));
     return li;
   }
 
   function render(prefix, force) {
     if (!prefix) return;
-    prefix = KaladontEngine.norm(prefix);
+    prefix = E.norm(prefix);
     if (!force && prefix === lastPrefix) return;
     lastPrefix = prefix;
     inp.value = prefix;
-    const excluded = new Set([...used, ...blacklist]);
-    const r = KaladontEngine.suggest(prefix, excluded, 3);
+    const r = E.suggest(prefix, { used: new Set([...used, ...blacklist]), alive, dead }, 3);
     $(".kh-info").textContent = `Na "${prefix.toUpperCase()}": ${r.total} riječi u rječniku`;
     const fin = $(".kh-fin"), cont = $(".kh-cont");
     fin.textContent = ""; cont.textContent = "";
@@ -94,7 +109,7 @@
   function fillGame(word) {
     const el = gameInput();
     if (!el) return;
-    const prefix = KaladontEngine.norm(readPrefix() || lastPrefix || "");
+    const prefix = E.norm(readPrefix() || lastPrefix || "");
     const rest = prefix && word.startsWith(prefix) ? word.slice(prefix.length) : word;
     const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, rest);
@@ -103,45 +118,50 @@
   }
 
   // ---------- čitanje stanja igre ----------
-  // Traži tekst "Traži se riječ na:" i slova odmah iza njega.
   function readPrefix() {
     const strong = document.querySelector(".trazena-slova strong");
     if (strong && strong.textContent.trim()) return strong.textContent.trim();
+    // rezerva: tekst "Traži se riječ na: XX" bilo gdje na stranici
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
-      if (panel.contains(node)) continue;
-      if (!/Traži se riječ na/i.test(node.nodeValue)) continue;
-      const parent = node.parentElement;
-      // slučaj 1: slova su u istom tekstu
-      const m = node.nodeValue.match(/na:\s*([a-zčćđšž]{1,4})/i);
-      if (m) return m[1];
-      // slučaj 2: slova su u susjednom elementu (badge)
-      let scope = parent;
+      if (panel.contains(node) || !/Traži se riječ na/i.test(node.nodeValue)) continue;
+      let scope = node.parentElement;
       for (let i = 0; i < 3 && scope; i++, scope = scope.parentElement) {
-        const t = scope.textContent.replace(/\s+/g, " ");
-        const mm = t.match(/Traži se riječ na:\s*([a-zčćđšž]{1,4})/i);
-        if (mm) return mm[1];
+        const m = scope.textContent.replace(/\s+/g, " ").match(/Traži se riječ na:\s*([a-zčćđšž]{1,4})/i);
+        if (m) return m[1];
       }
     }
     return null;
   }
 
-  // Bilježi iskorištene riječi: prepoznaje riječi iz rječnika koje se pojave u oblačićima/povijesti.
-  const wordSet = new Set(KALADONT_WORDS);
-  function scanUsed() {
-    // riječ može biti razlomljena u više elemenata (npr. "acido" + "za"), pa gledamo textContent elemenata
-    for (const el of document.body.querySelectorAll("*")) {
-      if (panel.contains(el) || el.childElementCount > 4) continue;
-      const t = el.textContent.trim().toLowerCase();
-      if (t.length >= 3 && t.length <= 30 && wordSet.has(t)) used.add(t);
+  // Uči iz igre:
+  //  - svaka odigrana riječ (oblačić iznad igrača, trenutna riječ) je iskorištena,
+  //    a njezina početna slova očito imaju nastavak
+  //  - "Nema nastavka na XX" potvrđuje mrtva slova
+  function learn() {
+    let changed = false;
+    const words = document.querySelectorAll(".rijec-oblak, .trenutna-rijec, .mobilna-trenutna-rijec");
+    for (const el of words) {
+      const w = E.norm(el.textContent).replace(/\s+/g, "");
+      if (!/^[a-zčćđšž]{3,}$/.test(w)) continue;
+      used.add(w);
+      const k = E.startKey(w);
+      if (!alive.has(k)) { alive.add(k); dead.delete(k); changed = true; }
     }
+    const m = document.body.innerText.match(/Nema nastavka na ([A-ZČĆĐŠŽ]{1,4})/g) || [];
+    for (const s of m) {
+      const k = E.norm(s.replace("Nema nastavka na ", ""));
+      if (!dead.has(k) && !alive.has(k)) { dead.add(k); changed = true; }
+    }
+    if (changed) save();
+    return changed;
   }
 
   function tick() {
-    scanUsed();
+    const changed = learn();
     const p = readPrefix();
-    if (p) render(p, false);
+    if (p) render(p, changed);
   }
 
   let pending = false;

@@ -11,24 +11,19 @@ const KaladontEngine = (() => {
     }
     return out;
   }
-  const norm = s => (s || "").toLowerCase().trim().replace(/dz/g, "dž");
+  const norm = s => (s || "").normalize("NFC").toLowerCase().trim();
   const startKey = w => letters(w).slice(0, 2).join("");
   const endKey = w => letters(w).slice(-2).join("");
 
-  // indeks: početna 2 slova -> riječi
+  // početna slova svih riječi iz rječnika (i pridjeva, glagola...) - igra prihvaća sve vrste
+  const dictStarts = new Set(KALADONT_STARTS);
+
   const byStart = new Map();
   for (const w of KALADONT_WORDS) {
     if (letters(w).length < 3) continue;
     const k = startKey(w);
     if (!byStart.has(k)) byStart.set(k, []);
     byStart.get(k).push(w);
-  }
-
-  function continuations(key, used, self) {
-    const list = byStart.get(key) || [];
-    let n = 0;
-    for (const w of list) if (w !== self && !used.has(w)) n++;
-    return n;
   }
 
   function shuffle(a) {
@@ -39,7 +34,7 @@ const KaladontEngine = (() => {
     return a;
   }
 
-  // biraj riječi s različitim završecima (ne tri puta "-ač")
+  // biraj riječi s različitim završecima
   function diverse(list, n) {
     const out = [], seen = new Set();
     for (const s of list) if (out.length < n && !seen.has(s.end)) { seen.add(s.end); out.push(s); }
@@ -48,30 +43,45 @@ const KaladontEngine = (() => {
   }
 
   /**
-   * prefix: 2 slova (npr. "za", "lje")
-   * used: Set već iskorištenih / odbijenih riječi
-   * Vraća { finishers: [{word,end}], continuers: [{word,end,count}], total }
+   * prefix: tražena slova (npr. "za", "nje")
+   * opts.used:  Set riječi koje ne treba predlagati (iskorištene / odbijene)
+   * opts.alive: Set završetaka za koje se u igri vidjelo da imaju nastavak
+   * opts.dead:  Set završetaka za koje je igra potvrdila "Nema nastavka"
    */
-  function suggest(prefix, used = new Set(), n = 3) {
+  function suggest(prefix, opts = {}, n = 3) {
+    const used = opts.used || new Set();
+    const alive = opts.alive || new Set();
+    const dead = opts.dead || new Set();
     const key = letters(norm(prefix)).slice(0, 2).join("");
     const cands = (byStart.get(key) || []).filter(w => !used.has(w));
+
     const finishers = [], cont = [];
     for (const w of cands) {
       const end = endKey(w);
-      const c = continuations(end, used, w);
-      if (c === 0) finishers.push({ word: w, end });
-      else cont.push({ word: w, end, count: c });
+      if (end === "ka") continue; // protivnik odgovara "kaladont" i ti ispadaš
+      if (dead.has(end)) { finishers.push({ word: w, end, sure: true }); continue; }
+      const own = (byStart.get(end) || []).filter(x => x !== w && !used.has(x)).length;
+      if (!dictStarts.has(end) && !alive.has(end)) finishers.push({ word: w, end, sure: false });
+      else cont.push({ word: w, end, count: own, rare: own === 0 });
     }
-    // Nastavak: preferiraj riječi koje protivniku ostavljaju što manje opcija.
+
+    // kaladont: ako se traži "ka", "kaladont" izbacuje prethodnog igrača
+    if (key === "ka" && !used.has("kaladont")) finishers.unshift({ word: "kaladont", end: "nt", sure: true, kaladont: true });
+
+    // potvrđeni završeci prvi
+    shuffle(finishers);
+    finishers.sort((a, b) => (b.kaladont || 0) - (a.kaladont || 0) || b.sure - a.sure);
+
+    // nastavak: što manje mogućih odgovora za protivnika
     shuffle(cont).sort((a, b) => a.count - b.count);
     const pool = cont.slice(0, Math.max(n * 4, 12));
     return {
-      finishers: diverse(shuffle(finishers), n),
+      finishers: diverse(finishers, n),
       continuers: diverse(shuffle(pool), n).sort((a, b) => a.count - b.count),
       total: cands.length,
       key
     };
   }
 
-  return { suggest, letters, endKey, norm };
+  return { suggest, letters, startKey, endKey, norm };
 })();

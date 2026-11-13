@@ -12,6 +12,10 @@ Firefox ekstenzija za igru [kaladont.hr](https://kaladont.hr). Za zadana dva slo
 - Na kaladont.hr se dolje desno pojavi prozor koji sam čita „Traži se riječ na: XX”.
 - Klik na riječ upiše je u polje u igri.
 - ✕ označi riječ koju igra ne prihvaća. Ekstenzija je pamti i više je ne predlaže.
+- ↩ označi da na ta slova ipak ima nastavka. Ta se slova više ne nude kao završna.
+- ✔ uz završnu riječ znači da je igra potvrdila mrtva slova („Nema nastavka na XX”). ? znači samo da ih nema u rječniku.
+- Ekstenzija uči iz igre: slova kojima počinje svaka odigrana riječ više se ne smatraju mrtvima, a „Nema nastavka na XX” ih potvrđuje.
+- Kad se traži „KA”, prvi prijedlog je „kaladont” (izbacuje prethodnog igrača). Riječi koje završavaju na „ka” se ne predlažu.
 - ↻ daje nove prijedloge.
 - Ikona ekstenzije u alatnoj traci otvara isti alat i izvan igre.
 
@@ -30,7 +34,7 @@ Običan Firefox instalira samo potpisane ekstenzije. Potpis se dobije besplatno 
 
 ## Rječnik
 
-`words.js` sadrži oko 22 000 hrvatskih imenica iz hunspell rječnika `hr_HR` (LibreOffice dictionaries). Generira se ovako:
+`words.js` sadrži oko 32 000 hrvatskih imenica i glagola (osnovni oblik) te popis početnih slova svih riječi iz hunspell rječnika `hr_HR` (LibreOffice dictionaries). Generira se ovako:
 
 ```bash
 curl -LO https://raw.githubusercontent.com/LibreOffice/dictionaries/master/hr_HR/hr_HR.dic
