@@ -24,3 +24,5 @@
 #kh-panel .kh-status{font-size:12px;color:#1d6b5a;min-height:0;margin-top:2px}
 #kh-panel .kh-word.kh-playing{background:#f5c542;border-color:#c99a10}
 #kh-panel .kh-word.kh-bad{text-decoration:line-through;opacity:.5;background:#f3dede}
+#kh-panel.kh-blur-fin .kh-fin .kh-word,#kh-panel.kh-blur-fin .kh-fin .kh-meta{filter:blur(6px);transition:filter .15s}
+#kh-panel.kh-blur-fin .kh-fin li:hover .kh-word,#kh-panel.kh-blur-fin .kh-fin li:hover .kh-meta{filter:none}

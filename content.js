@@ -7,7 +7,7 @@
     perLetter: [90, 220],       // razmak između slova
     beforeSend: [250, 600]      // pauza prije Entera
   };
-  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", learned: "kaladontLearnedWords", replay: "kaladontAutoReplay", aliveSrc: "kaladontAliveSource" };
+  const KEYS = { black: "kaladontBlacklist", alive: "kaladontAlive", dead: "kaladontDead", pilot: "kaladontAutopilot", learned: "kaladontLearnedWords", replay: "kaladontAutoReplay", aliveSrc: "kaladontAliveSource", blur: "kaladontBlurFinishers" };
   let autopilot = false;
   let autoReplay = false;
   const used = new Set();      // riječi iskorištene u ovoj partiji
@@ -30,6 +30,7 @@
     $(".kh-pilot-cb").checked = autopilot;
     autoReplay = r[KEYS.replay] === true;
     $(".kh-replay-cb").checked = autoReplay;
+    setBlur(r[KEYS.blur] === true);
     loaded = true;
     tick();
     render(lastPrefix, true);
@@ -55,6 +56,7 @@
       </div>
       <label class="kh-auto kh-pilot"><input type="checkbox" class="kh-pilot-cb"> 🤖 autopilot (igra umjesto mene)</label>
       <label class="kh-auto"><input type="checkbox" class="kh-replay-cb"> 🔁 automatski nova igra</label>
+      <label class="kh-auto"><input type="checkbox" class="kh-blur-cb"> 🙈 zamuti završne riječi (prijeđi mišem za prikaz)</label>
       <div class="kh-status"></div>
       <div class="kh-info"></div>
       <div class="kh-title">🏁 Završavaju igru</div>
@@ -76,6 +78,14 @@
     browser.storage.local.set({ [KEYS.pilot]: autopilot });
     status(autopilot ? "Autopilot uključen – čekam svoj red." : "");
     tick();
+  };
+  function setBlur(on) {
+    panel.classList.toggle("kh-blur-fin", on);
+    $(".kh-blur-cb").checked = on;
+  }
+  $(".kh-blur-cb").onchange = e => {
+    setBlur(e.target.checked);
+    browser.storage.local.set({ [KEYS.blur]: e.target.checked });
   };
   $(".kh-replay-cb").onchange = e => {
     autoReplay = e.target.checked;
